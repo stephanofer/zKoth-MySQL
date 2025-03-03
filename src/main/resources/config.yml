@@ -1,0 +1,25 @@
+# Versión 1.0
+
+# Configuración de la base de datos MySQL
+database:
+  host: "localhost"
+  # Puerto del servidor MySQL
+  port: 3306
+  # Nombre de la base de datos a utilizar
+  database: "minecraft_server"
+  # Nombre de usuario para la conexión
+  username: "minecraft_user"
+  # Contraseña para la conexión
+  password: "password_segura123"
+  # Prefijo para las tablas del plugin
+  table-prefix: "mi_plugin_"
+  use-ssl: false
+  # Configuración de la conexión
+  connection:
+    # Tiempo máximo de espera en milisegundos
+    timeout: 5000
+    # Número máximo de conexiones simultáneas
+    max-pool-size: 10
+    # Verificar validez de la conexión al obtenerla del pool
+    test-on-borrow: true
+debug: false

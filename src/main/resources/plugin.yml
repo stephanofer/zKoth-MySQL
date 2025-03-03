@@ -1,0 +1,8 @@
+name: zKoth-Data
+version: '1.0'
+main: com.stephanofer.zKothData.ZKothData
+api-version: '1.21'
+authors: [ stephanofer ]
+website: https://stephanofer.com/
+depend: [zKoth, PlaceholderAPI]
+
