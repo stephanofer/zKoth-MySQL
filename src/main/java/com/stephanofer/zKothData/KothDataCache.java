@@ -16,7 +16,7 @@ public class KothDataCache {
     private final List<Map<String, Object>> topPlayersCache;
     private long lastTopPlayersUpdate = 0;
     private final Object topPlayersLock = new Object();
-    private final int maxTopPlayersSize; // Tamaño máximo para topPlayersCache
+    private final int maxTopPlayersSize;
 
 
 
@@ -51,7 +51,6 @@ public class KothDataCache {
         }
     }
 
-    // Helper methods for logging
     private void logInfo(String message) {
         plugin.getLogger().info(message);
     }
@@ -140,7 +139,8 @@ public class KothDataCache {
 
         int totalWins = stats.values().stream().mapToInt(Integer::intValue).sum();
         logDebug("CACHE STATS - Player " + uuid + " has " + totalWins + " total wins");
-        return totalWins;    }
+        return totalWins;
+    }
 
 
     public int getKothWins(UUID uuid, String kothName) {
@@ -171,9 +171,6 @@ public class KothDataCache {
                 " wins updated from " + oldValue + " to " + (oldValue + 1));
     }
 
-    /**
-     * Log cache statistics periodically
-     */
     private void logCacheStatistics() {
         logInfo("=== CACHE STATISTICS ===");
         logInfo("Current time: " + getCurrentTime());

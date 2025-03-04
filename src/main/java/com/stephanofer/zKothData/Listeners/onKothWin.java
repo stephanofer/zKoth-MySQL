@@ -1,7 +1,6 @@
 package com.stephanofer.zKothData.Listeners;
 
 
-import com.stephanofer.zKothData.KothDataCache;
 import com.stephanofer.zKothData.ZKothData;
 import com.stephanofer.zKothData.database.DatabaseManager;
 import com.stephanofer.zKothData.models.KothWinDTO;
@@ -18,16 +17,14 @@ public class onKothWin implements Listener {
 
     private final ZKothData plugin;
     private final DatabaseManager databaseManager;
-    private final KothDataCache kothDataCache;
 
     public onKothWin(ZKothData plugin) {
         this.plugin = plugin;
         this.databaseManager = plugin.getDatabaseManager();
-        this.kothDataCache = databaseManager.getKothDataCache();
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onKothWin(KothWinEvent event) {
+    public void onKothWinListener(KothWinEvent event) {
 
         if (event.isCancelled()) {
             return;
@@ -49,7 +46,6 @@ public class onKothWin implements Listener {
             ));
         }
 
-//        databaseManager.registerPlayer(player.getUniqueId(), player.getName());
         KothWinDTO win = new KothWinDTO(player.getUniqueId(), player.getName(), kothName);
         databaseManager.registerWinAsync(win).exceptionally(ex -> {
             plugin.getLogger().log(Level.SEVERE,

@@ -45,7 +45,6 @@ public final class ZKothData extends JavaPlugin {
     }
 
     private void registerPlaceholders() {
-        // Verificar si PlaceholderAPI está presente
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
             getLogger().info("PlaceholderAPI encontrado, registrando placeholders...");
             new KothStatsExpansion(this).register();
