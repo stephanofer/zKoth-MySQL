@@ -3,14 +3,14 @@ package com.stephanofer.zKothData.models;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-public class KothWin {
+public class KothWinDTO {
 
     private final UUID playerUuid;
     private final String playerName;
     private final String kothName;
     private final LocalDateTime winTime;
 
-    public KothWin(UUID playerUuid, String playerName, String kothName) {
+    public KothWinDTO(UUID playerUuid, String playerName, String kothName) {
         this.playerUuid = playerUuid;
         this.playerName = playerName;
         this.kothName = kothName;

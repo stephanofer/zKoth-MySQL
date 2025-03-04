@@ -1,57 +1,79 @@
 package com.stephanofer.zKothData.hook;
 
+import com.stephanofer.zKothData.KothDataCache;
 import com.stephanofer.zKothData.ZKothData;
-import com.stephanofer.zKothData.database.DatabaseManager;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.NotNull;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 public class KothStatsExpansion extends PlaceholderExpansion {
     private final ZKothData plugin;
-    private final DatabaseManager databaseManager;
+    private final KothDataCache kothDataCache;
 
-
-
-    // Caché para mejorar el rendimiento y evitar consultas excesivas a la base de datos
-    private final Map<UUID, Map<String, Integer>> statsCache = new ConcurrentHashMap<>();
-//    private final Map<String, String> topPlayersCache = new ConcurrentHashMap<>();
-
-    // Tiempo para actualizar la caché (en milisegundos)
-    private final long PLAYER_CACHE_EXPIRY = 60000; // 1 minuto
-//    private final long TOP_CACHE_EXPIRY = 300000; // 5 minutos
-
-//    private long lastTopCacheUpdate = 0;
-    private final Map<UUID, Long> playerCacheTimestamps = new ConcurrentHashMap<>();
+    private volatile List<Map<String, Object>> topPlayersCache = Collections.emptyList();
+    private long lastTopPlayersCacheUpdate = 0;
+    private final long topPlayersCacheExpiryMs;
 
     public KothStatsExpansion(ZKothData plugin) {
         this.plugin = plugin;
-        this.databaseManager = plugin.getDatabaseManager();
+        this.kothDataCache = plugin.getDatabaseManager().getKothDataCache();
 
-        plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, this::cleanupExpiredCache, 20 * 60, 20 * 60);
+        int refreshSeconds = plugin.getConfig().getInt("cache.top-players-refresh", 60);
+        this.topPlayersCacheExpiryMs = TimeUnit.SECONDS.toMillis(refreshSeconds);
 
+        // Initial population of cache
+        refreshTopPlayersCache();
+
+
+        plugin.getServer().getScheduler().runTaskTimerAsynchronously(
+                plugin,
+                this::refreshTopPlayersCache,
+                refreshSeconds * 20L, // Convert to ticks
+                refreshSeconds * 20L  // Convert to ticks
+        );
     }
 
+
+    private void refreshTopPlayersCache() {
+        int topLimit = plugin.getConfig().getInt("top-players.limit", 10);
+
+        // Get top players from the cache manager
+        plugin.getDatabaseManager().getTopPlayers(topLimit)
+                .thenAccept(topPlayers -> {
+                    this.topPlayersCache = topPlayers;
+                    this.lastTopPlayersCacheUpdate = System.currentTimeMillis();
+                    if (plugin.getConfig().getBoolean("debug", false)) {
+                        plugin.getLogger().info("[PAPI] Top players cache refreshed with " + topPlayers.size() + " entries");
+                    }
+                })
+                .exceptionally(ex -> {
+                    plugin.getLogger().log(Level.WARNING, "Error refreshing top players cache: " + ex.getMessage(), ex);
+                    return null;
+                });
+    }
+
+
+
      @Override
-    public String getIdentifier() {
-        return "zkothstats";
+    public @NotNull String getIdentifier() {
+        return "zkoth";
     }
 
     @Override
-    public String getAuthor() {
+    public @NotNull String getAuthor() {
         return plugin.getDescription().getAuthors().get(0);
     }
 
     @Override
-    public String getVersion() {
+    public @NotNull String getVersion() {
         return plugin.getDescription().getVersion();
     }
 
@@ -71,77 +93,116 @@ public class KothStatsExpansion extends PlaceholderExpansion {
         if (player == null) {
             return "";
         }
+        UUID uuid = player.getUniqueId();
 
-        // Placeholder para total de victorias: %kothstats_total_wins%
+
+        // Placeholder para total de victorias: %zkothstats_total_wins%
         if (identifier.equals("total_wins")) {
-            return String.valueOf(getTotalWins(player.getUniqueId()));
+            return String.valueOf(getTotalWins(uuid));
+        }
+
+        // Specific KotH wins placeholder
+        if (identifier.startsWith("wins_")) {
+            String kothName = identifier.substring(5); // Remove "wins_" to get kothName
+            return String.valueOf(getKothWins(uuid, kothName));
+        }
+
+        // Top player placeholders
+        if (identifier.startsWith("top_")) {
+            return handleTopPlaceholder(identifier);
         }
 
         return null;
     }
 
     /**
-     * Obtiene el total de victorias de un jugador
+     * Get total wins for a player using cache when available
+     * @param uuid Player UUID
+     * @return Total wins count
      */
-    private int getTotalWins(UUID playerUuid) {
-        try {
-            ensurePlayerDataLoaded(playerUuid);
+    private int getTotalWins(UUID uuid) {
+        // Check cache first for better performance
+        int cachedTotal = kothDataCache.getTotalWins(uuid);
+        if (cachedTotal > 0) {
+            return cachedTotal;
+        }
 
-            Map<String, Integer> playerStats = statsCache.getOrDefault(playerUuid, new HashMap<>());
-            return playerStats.values().stream().mapToInt(Integer::intValue).sum();
-        } catch (Exception e) {
-            plugin.getLogger().warning("Error al obtener total de victorias para " + playerUuid + ": " + e.getMessage());
+        // If not in cache, load from database
+        try {
+            Map<String, Integer> stats = plugin.getDatabaseManager().getPlayerStats(uuid).get();
+            return stats.values().stream().mapToInt(Integer::intValue).sum();
+        } catch (InterruptedException | ExecutionException e) {
+            plugin.getLogger().log(Level.WARNING, "Error loading player stats: " + e.getMessage(), e);
             return 0;
         }
     }
 
     /**
-     * Asegura que los datos del jugador estén cargados en caché
+     * Get wins for a specific KotH
+     * @param uuid Player UUID
+     * @param kothName KotH name
+     * @return Win count
      */
-    private void ensurePlayerDataLoaded(UUID playerUuid) throws ExecutionException, InterruptedException, SQLException {
-        // Verificar si necesitamos actualizar la caché
-        Long lastUpdate = playerCacheTimestamps.get(playerUuid);
-        long now = System.currentTimeMillis();
+    private int getKothWins(UUID uuid, String kothName) {
+        // Check cache first
+        int cachedWins = kothDataCache.getKothWins(uuid, kothName);
+        if (cachedWins > 0) {
+            return cachedWins;
+        }
 
-        if (lastUpdate == null || (now - lastUpdate > PLAYER_CACHE_EXPIRY)) {
-            // Necesitamos actualizar la caché
-            CompletableFuture<ResultSet> future = databaseManager.getPlayerStats(playerUuid);
-            ResultSet rs = future.get(); // Esperamos por los resultados
-
-            if (rs != null) {
-                Map<String, Integer> playerStats = new HashMap<>();
-
-                while (rs.next()) {
-                    String kothName = rs.getString("koth_name");
-                    int wins = rs.getInt("wins");
-                    playerStats.put(kothName, wins);
-                }
-
-                // Actualizar caché
-                statsCache.put(playerUuid, playerStats);
-                playerCacheTimestamps.put(playerUuid, now);
-
-                // Cerrar recursos
-                rs.getStatement().getConnection().close();
-            }
+        // If not in cache, load from database
+        try {
+            Map<String, Integer> stats = plugin.getDatabaseManager().getPlayerStats(uuid).get();
+            return stats.getOrDefault(kothName, 0);
+        } catch (InterruptedException | ExecutionException e) {
+            plugin.getLogger().log(Level.WARNING, "Error loading player stats: " + e.getMessage(), e);
+            return 0;
         }
     }
 
-
     /**
-     * Limpia la caché expirada para evitar fugas de memoria
+     * Handle top player placeholders
+     * Format: top_<position>_<field>
+     * Examples:
+     * - zkoth_top_1_name
+     * - zkoth_top_1_wins
+     * @param identifier The full identifier
+     * @return The placeholder value
      */
-    private void cleanupExpiredCache() {
-        long now = System.currentTimeMillis();
+    private String handleTopPlaceholder(String identifier) {
+        // Parse the identifier
+        String[] parts = identifier.split("_");
+        if (parts.length < 3) {
+            return "0";
+        }
 
-        // Limpiar caché de jugadores
-        playerCacheTimestamps.entrySet().removeIf(entry -> {
-            if (now - entry.getValue() > PLAYER_CACHE_EXPIRY) {
-                // También eliminar las estadísticas
-                statsCache.remove(entry.getKey());
-                return true;
+        try {
+            int position = Integer.parseInt(parts[1]);
+            String field = parts[2];
+
+            // Use our locally cached top players instead of hitting DB or even the KothDataCache
+            List<Map<String, Object>> topPlayers = this.topPlayersCache;
+
+            // Check if position is valid
+            if (position <= 0 || position > topPlayers.size()) {
+                return field.equals("name") ? "Ninguno" : "0";
             }
-            return false;
-        });
+
+            // Get player at position (adjust for 0-based index)
+            Map<String, Object> playerData = topPlayers.get(position - 1);
+
+            // Return requested field
+            switch (field) {
+                case "name":
+                    return (String) playerData.get("name");
+                case "wins":
+                    return String.valueOf(playerData.get("totalWins"));
+                default:
+                    return "0";
+            }
+        } catch (NumberFormatException e) {
+            return "0";
+        }
     }
+
 }

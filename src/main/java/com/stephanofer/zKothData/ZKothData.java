@@ -1,6 +1,6 @@
 package com.stephanofer.zKothData;
 
-import com.stephanofer.zKothData.Listeners.KothWinEvent;
+import com.stephanofer.zKothData.Listeners.onKothWin;
 import com.stephanofer.zKothData.Listeners.PlayerJoin;
 import com.stephanofer.zKothData.database.DatabaseManager;
 import com.stephanofer.zKothData.hook.KothStatsExpansion;
@@ -25,7 +25,7 @@ public final class ZKothData extends JavaPlugin {
         saveConfig();
 
         this.databaseManager = new DatabaseManager(this);
-        getServer().getPluginManager().registerEvents(new KothWinEvent(this), this);
+        getServer().getPluginManager().registerEvents(new onKothWin(this), this);
         getServer().getPluginManager().registerEvents(new PlayerJoin(this), this);
         registerPlaceholders();
 

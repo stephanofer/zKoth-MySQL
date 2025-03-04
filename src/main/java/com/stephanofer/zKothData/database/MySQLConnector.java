@@ -9,23 +9,15 @@ import java.sql.SQLException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
-/**
- * Implementación del DatabaseConnector para MySQL usando HikariCP
- * para un pool de conexiones de alto rendimiento.
- */
+
 public class MySQLConnector implements DatabaseConnector {
     private final ZKothData plugin;
     private HikariDataSource hikari;
-    // Contador atómico para conexiones abiertas (thread-safe)
     private final AtomicInteger openConnections;
-    // Objeto para sincronización
     private final Object lock;
 
-    /**
-     * Constructor para configurar la conexión a MySQL
-     */
     public MySQLConnector(ZKothData plugin, String hostname, int port, String database,
-                          String username, String password, boolean useSSL, int poolSize) {
+                          String username, String password, boolean useSSL, int poolSize, int connectionTimeout) {
         this.plugin = plugin;
         this.openConnections = new AtomicInteger();
         this.lock = new Object();
@@ -37,9 +29,9 @@ public class MySQLConnector implements DatabaseConnector {
         config.setPassword(password);
         config.setMaximumPoolSize(poolSize);
         config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        config.setConnectionTimeout(connectionTimeout);
 
 
-        // Optimizaciones de HikariCP para MySQL
         config.addDataSourceProperty("cachePrepStmts", "true");
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
@@ -51,13 +43,9 @@ public class MySQLConnector implements DatabaseConnector {
         config.addDataSourceProperty("elideSetAutoCommits", "true");
         config.addDataSourceProperty("maintainTimeStats", "false");
 
-        try { // Intentar usar el driver nuevo
+        try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-        } catch (ClassNotFoundException e1) {
-            try { // Si no, usar el driver antiguo
-                Class.forName("com.mysql.jdbc.Driver");
-            } catch (ClassNotFoundException ignored) { }
-        }
+        } catch (ClassNotFoundException ignored) { }
 
         try {
             this.hikari = new HikariDataSource(config);
