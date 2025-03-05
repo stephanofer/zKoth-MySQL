@@ -52,6 +52,7 @@ public class MySQLConnector implements DatabaseConnector {
             plugin.getLogger().info("Conexión a base de datos establecida correctamente");
         } catch (Exception ex) {
             plugin.getLogger().log(Level.SEVERE, "Error al conectar con MySQL. ¿Están correctas las credenciales?", ex);
+            plugin.getServer().getPluginManager().disablePlugin(plugin);
         }
     }
 

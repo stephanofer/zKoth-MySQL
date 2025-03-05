@@ -106,8 +106,7 @@ public class KothStatsExpansion extends PlaceholderExpansion {
             int position = Integer.parseInt(parts[1]);
             String field = parts[2];
 
-            int topLimit = plugin.getConfig().getInt("top-players.limit", 10);
-            List<SortedPlayer> topPlayers = databaseManager.getTopPlayers(topLimit).get();
+            List<SortedPlayer> topPlayers = kothDataCache.getTopPlayers();
 
             if (position <= 0 || position > topPlayers.size()) {
                 return field.equals("name") ? "Ninguno" : "0";
@@ -124,9 +123,6 @@ public class KothStatsExpansion extends PlaceholderExpansion {
                     return "0";
             }
         } catch (NumberFormatException e) {
-            return "0";
-        } catch (InterruptedException | ExecutionException e) {
-            plugin.getLogger().log(Level.WARNING, "Error loading top players: " + e.getMessage(), e);
             return "0";
         }
     }
