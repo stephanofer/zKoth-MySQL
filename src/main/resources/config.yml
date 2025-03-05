@@ -13,9 +13,8 @@ database:
     max-pool-size: 10
 # Configuración de caché
 cache:
-  player-stats-expiry: 5
-  top-players-refresh: 60
+  player-stats-expiry: 10
+  top-players-refresh: 180
   top-players-max-size: 10
 top-players:
   limit: 10
-  update-delay: 5

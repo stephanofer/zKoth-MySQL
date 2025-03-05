@@ -80,7 +80,6 @@ public class MySQLConnector implements DatabaseConnector {
 
     @Override
     public void connect(ConnectionCallback callback, boolean useTransaction) {
-        // Incrementa el contador de conexiones abiertas
         this.openConnections.incrementAndGet();
 
         try (Connection connection = this.hikari.getConnection()) {
@@ -90,15 +89,12 @@ public class MySQLConnector implements DatabaseConnector {
             }
 
             try {
-                // Ejecuta el callback con la conexión
                 callback.accept(connection);
 
-                // Si estamos usando transacción, hacemos commit
                 if (useTransaction) {
                     connection.commit();
                 }
             } catch (SQLException ex) {
-                // Si hay error y estamos usando transacción, hacemos rollback
                 if (useTransaction) {
                     try {
                         connection.rollback();
@@ -108,7 +104,6 @@ public class MySQLConnector implements DatabaseConnector {
                 }
                 throw ex;
             } finally {
-                // Restauramos el estado autoCommit original
                 if (useTransaction) {
                     connection.setAutoCommit(originalAutoCommit);
                 }
@@ -116,9 +111,7 @@ public class MySQLConnector implements DatabaseConnector {
         } catch (SQLException ex) {
             this.plugin.getLogger().log(Level.SEVERE, "Error al ejecutar consulta MySQL: " + ex.getMessage(), ex);
         } finally {
-            // Decrementa el contador de conexiones abiertas
             int open = this.openConnections.decrementAndGet();
-            // Si no hay más conexiones abiertas, notifica a los hilos en espera
             synchronized (this.lock) {
                 if (open == 0)
                     this.lock.notify();

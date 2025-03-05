@@ -3,6 +3,7 @@ package com.stephanofer.zKothData.hook;
 import com.stephanofer.zKothData.KothDataCache;
 import com.stephanofer.zKothData.ZKothData;
 import com.stephanofer.zKothData.database.DatabaseManager;
+import com.stephanofer.zKothData.models.SortedPlayer;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.NotNull;
@@ -62,7 +63,6 @@ public class KothStatsExpansion extends PlaceholderExpansion {
             return String.valueOf(getKothWins(uuid, kothName));
         }
 
-        // Top player placeholders
         if (identifier.startsWith("top_")) {
             return handleTopPlaceholder(identifier);
         }
@@ -107,19 +107,19 @@ public class KothStatsExpansion extends PlaceholderExpansion {
             String field = parts[2];
 
             int topLimit = plugin.getConfig().getInt("top-players.limit", 10);
-            List<Map<String, Object>> topPlayers = databaseManager.getTopPlayers(topLimit).get();
+            List<SortedPlayer> topPlayers = databaseManager.getTopPlayers(topLimit).get();
 
             if (position <= 0 || position > topPlayers.size()) {
                 return field.equals("name") ? "Ninguno" : "0";
             }
 
-            Map<String, Object> playerData = topPlayers.get(position - 1);
+            SortedPlayer playerData = topPlayers.get(position - 1);
 
             switch (field) {
                 case "name":
-                    return (String) playerData.get("name");
+                    return playerData.getName();
                 case "wins":
-                    return String.valueOf(playerData.get("totalWins"));
+                    return String.valueOf(playerData.getTotalWins());
                 default:
                     return "0";
             }

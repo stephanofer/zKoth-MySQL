@@ -2,6 +2,8 @@ package com.stephanofer.zKothData;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.stephanofer.zKothData.database.DatabaseManager;
+import com.stephanofer.zKothData.models.SortedPlayer;
 import org.bukkit.configuration.ConfigurationSection;
 
 import java.text.SimpleDateFormat;
@@ -11,14 +13,19 @@ import java.util.concurrent.TimeUnit;
 public class KothDataCache {
 
     private final ZKothData plugin;
+    private final DatabaseManager databaseManager;
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+
+
     private final Cache<UUID, Map<String, Integer>> playerStatsCache;
-    private final List<Map<String, Object>> topPlayersCache;
+
+    private final List<SortedPlayer> topPlayersCache;
+    private final int topPlayersExpiry;
+
+
     private long lastTopPlayersUpdate = 0;
     private final Object topPlayersLock = new Object();
     private final int maxTopPlayersSize;
-
-
 
     private int cacheHits = 0;
     private int cacheMisses = 0;
@@ -28,17 +35,19 @@ public class KothDataCache {
 
     public KothDataCache(ZKothData plugin) {
         this.plugin = plugin;
+        this.databaseManager = plugin.getDatabaseManager();
 
         ConfigurationSection cacheConfig = plugin.getConfig().getConfigurationSection("cache");
         int playerStatsExpiry = cacheConfig != null ? cacheConfig.getInt("player-stats-expiry", 5) : 5;
-        int topPlayersExpiry = cacheConfig != null ? cacheConfig.getInt("top-players-refresh", 60) : 60;
+        this.topPlayersExpiry = cacheConfig != null ? cacheConfig.getInt("top-players-refresh", 60) : 60;
         this.maxTopPlayersSize = cacheConfig != null ? cacheConfig.getInt("top-players-max-size", 100) : 10;
 
         this.playerStatsCache = CacheBuilder.newBuilder()
-                .expireAfterWrite(playerStatsExpiry, TimeUnit.MINUTES)
-                .maximumSize(500)
+                .maximumSize(1000)
+                .expireAfterAccess(playerStatsExpiry, TimeUnit.MINUTES)
                 .recordStats()
                 .build();
+
 
         this.topPlayersCache = new ArrayList<>();
 
@@ -51,34 +60,13 @@ public class KothDataCache {
         }
     }
 
-    private void logInfo(String message) {
-        plugin.getLogger().info(message);
-    }
-
-    private void logDebug(String message) {
-        if (plugin.getConfig().getBoolean("debug", false)) {
-            plugin.getLogger().info("[CACHE] " + message);
-        }
-    }
-
-    private String getCurrentTime() {
-        return timeFormat.format(new Date());
-    }
-
-    private String getFormattedTime(long timestamp) {
-        return timeFormat.format(new Date(timestamp));
-    }
-
     public Map<String, Integer> getPlayerStats(UUID uuid) {
         Map<String, Integer> stats = playerStatsCache.getIfPresent(uuid);
-
         if(stats != null) {
             cacheHits++;
-            logDebug("CACHE HIT - Retrieved stats for player "  + uuid + " : " + cacheHits);
             return stats;
         }else {
             cacheMisses++;
-            logDebug("CACHE MISS - Retrieved stats for player "  + uuid);
             return null;
         }
     }
@@ -87,48 +75,34 @@ public class KothDataCache {
     public void setPlayerStats(UUID uuid, Map<String, Integer> stats) {
         cacheUpdates++;
         playerStatsCache.put(uuid, stats);
-
-        logDebug("CACHE UPDATE - Stored stats for player " + uuid + " with " +
-                stats.size() + " KotH entries");
     }
 
     public void invalidatePlayerStats(UUID uuid) {
         playerStatsCache.invalidate(uuid);
-        logDebug("CACHE INVALIDATE - Removed stats for player " + uuid);
     }
 
-    public List<Map<String, Object>> getTopPlayers(int limit) {
+    public List<SortedPlayer> getTopPlayers() {
         synchronized (topPlayersLock) {
             if (topPlayersCache.isEmpty()) {
-                logDebug("TOP PLAYERS CACHE - Empty cache requested");
                 return Collections.emptyList();
             }
 
-            logDebug("TOP PLAYERS CACHE - Retrieved " +
-                    Math.min(limit, topPlayersCache.size()) + " players from cache");
-            return topPlayersCache.subList(0, Math.min(limit, topPlayersCache.size()));
+            return topPlayersCache;
         }
     }
 
-    public void updateTopPlayers(List<Map<String, Object>> players) {
+    public void updateTopPlayers(List<SortedPlayer> players) {
         synchronized (topPlayersLock) {
             topPlayersCache.clear();
             int count = Math.min(players.size(), maxTopPlayersSize);
             topPlayersCache.addAll(players.subList(0, count));
             lastTopPlayersUpdate = System.currentTimeMillis();
             topPlayersRefreshes++;
-            logDebug("TOP PLAYERS CACHE - Updated with " + players.size() +
-                    " players at " + getCurrentTime());
         }
     }
 
-    public boolean needsTopPlayersRefresh(int refreshSeconds) {
-        boolean needsRefresh = System.currentTimeMillis() - lastTopPlayersUpdate > refreshSeconds * 1000L;
-        if (needsRefresh) {
-            logDebug("TOP PLAYERS CACHE - Refresh needed (last update: " +
-                    getFormattedTime(lastTopPlayersUpdate) + ")");
-        }
-        return needsRefresh;
+    public boolean needsTopPlayersRefresh() {
+        return System.currentTimeMillis() - lastTopPlayersUpdate > this.topPlayersExpiry * 1000L;
     }
 
     public int getTotalWins(UUID uuid) {
@@ -137,9 +111,7 @@ public class KothDataCache {
             return 0;
         }
 
-        int totalWins = stats.values().stream().mapToInt(Integer::intValue).sum();
-        logDebug("CACHE STATS - Player " + uuid + " has " + totalWins + " total wins");
-        return totalWins;
+        return stats.values().stream().mapToInt(Integer::intValue).sum();
     }
 
 
@@ -149,10 +121,7 @@ public class KothDataCache {
             return 0;
         }
 
-        int wins = stats.getOrDefault(kothName, 0);
-        logDebug("CACHE STATS - Player " + uuid + " has " + wins +
-                " wins for KotH " + kothName);
-        return wins;
+        return stats.getOrDefault(kothName, 0);
     }
 
 
@@ -160,15 +129,11 @@ public class KothDataCache {
         Map<String, Integer> stats = getPlayerStats(uuid);
         if (stats == null) {
             stats = new HashMap<>();
-            logDebug("CACHE CREATE - New stats map created for player " + uuid);
         }
 
         int oldValue = stats.getOrDefault(kothName, 0);
         stats.put(kothName, oldValue + 1);
         setPlayerStats(uuid, stats);
-
-        logDebug("CACHE INCREMENT - Player " + uuid + " KotH " + kothName +
-                " wins updated from " + oldValue + " to " + (oldValue + 1));
     }
 
     private void logCacheStatistics() {
@@ -185,4 +150,18 @@ public class KothDataCache {
         logInfo("Guava stats: " + playerStatsCache.stats().toString());
         logInfo("========================");
     }
+
+
+    private void logInfo(String message) {
+        plugin.getLogger().info(message);
+    }
+
+    private String getCurrentTime() {
+        return timeFormat.format(new Date());
+    }
+
+    private String getFormattedTime(long timestamp) {
+        return timeFormat.format(new Date(timestamp));
+    }
+
 }
