@@ -9,10 +9,7 @@ import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-import java.util.logging.Level;
 
 public class KothStatsExpansion extends PlaceholderExpansion {
     private final ZKothData plugin;
@@ -29,7 +26,7 @@ public class KothStatsExpansion extends PlaceholderExpansion {
 
      @Override
     public @NotNull String getIdentifier() {
-        return "zkoth";
+        return "zkothdata";
     }
 
     @Override

@@ -2,12 +2,15 @@ package com.stephanofer.zKothData;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.stephanofer.zKothData.database.DatabaseManager;
 import com.stephanofer.zKothData.models.SortedPlayer;
 import org.bukkit.configuration.ConfigurationSection;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public class KothDataCache {
@@ -44,9 +47,17 @@ public class KothDataCache {
 
         this.playerStatsCache = CacheBuilder.newBuilder()
                 .maximumSize(1000)
-                .expireAfterAccess(playerStatsExpiry, TimeUnit.MINUTES)
+//                .expireAfterAccess(playerStatsExpiry, TimeUnit.MINUTES)
                 .recordStats()
                 .build();
+
+        //new CacheLoader<UUID, Map<String, Integer>>() {
+        //                    @Override
+        //                    public Map<String, Integer> load(UUID key) throws Exception {
+        //                        cacheMisses++;
+        //                        return databaseManager.getPlayerStats(key).get();
+        //                    }
+        //                }
 
 
         this.topPlayersCache = new ArrayList<>();

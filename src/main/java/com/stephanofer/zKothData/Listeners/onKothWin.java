@@ -53,7 +53,6 @@ public class onKothWin implements Listener {
                             " en KotH " + kothName + ": " + ex.getMessage(), ex);
             return false;
         });
-
     }
 
 }
