@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.stephanofer'
-version = '1.0'
+version = '1.1'
 
 repositories {
     mavenCentral()
@@ -22,7 +22,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
+    compileOnly(files("libs/server.jar"))
     implementation("mysql:mysql-connector-java:8.0.33"){
         exclude group: 'mysql', module: 'mysql-connector-java'
     }
@@ -44,10 +44,13 @@ tasks.withType(JavaCompile).configureEach {
 
 shadowJar {
     archiveClassifier.set(null)
+    destinationDirectory.set(file("$rootDir/target"))
 
     relocate('com.mysql', 'com.stephanofer.zKothData.lib.mysql')
     relocate('com.zaxxer.hikari', 'com.stephanofer.zKothData.lib.hikari')
 }
+
+tasks.build.dependsOn tasks.shadowJar
 
 processResources {
     def props = [version: version]

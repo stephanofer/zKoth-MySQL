@@ -1,5 +1,5 @@
 name: zKoth-Data
-version: '1.0'
+version: '${version}'
 main: com.stephanofer.zKothData.ZKothData
 api-version: '1.21'
 authors: [ stephanofer ]

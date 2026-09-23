@@ -29,13 +29,13 @@ public final class ZKothData extends JavaPlugin {
         int topLimit = getConfig().getInt("top-players.limit", 10);
         int playerRefresh = getConfig().getInt("cache.top-players-refresh", 180);
 
-        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
+        getServer().getScheduler().runTaskTimer(this, () -> {
             databaseManager.getTopPlayers(topLimit).thenAccept(resul -> {
                 if (getConfig().getBoolean("debug", false)) {
                     getLogger().info("Se cargó correctamente los tops");
                 }
             });
-        }, 0L, playerRefresh * 20L);
+        }, 20L, playerRefresh * 20L);
 
         getServer().getPluginManager().registerEvents(new onKothWin(this), this);
         getServer().getPluginManager().registerEvents(new PlayerJoin(this), this);

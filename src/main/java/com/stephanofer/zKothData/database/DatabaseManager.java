@@ -106,21 +106,23 @@ public class DatabaseManager {
         logInfo("Initializing database tables at " + getCurrentTime());
         long startTime = System.currentTimeMillis();
 
-        CompletableFuture.supplyAsync(() -> {
-            AtomicBoolean success = new AtomicBoolean(false);
-            databaseConnector.connect(connection -> {
-                try (Statement statement = connection.createStatement()) {
-                    statement.executeUpdate(CREATE_KOTH_PLAYERS_TABLE);
-                    statement.executeUpdate(CREATE_KOTH_WINS_TABLE);
-                    statement.executeUpdate(CREATE_KOTH_STATS_TABLE);
-                    success.set(true);
-                }
-            });
-            long duration = System.currentTimeMillis() - startTime;
-            logInfo("Tables initialization completed in " + duration + "ms");
+        databaseConnector.connect(connection -> {
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate(CREATE_KOTH_PLAYERS_TABLE);
+                statement.executeUpdate(CREATE_KOTH_WINS_TABLE);
+                statement.executeUpdate(CREATE_KOTH_STATS_TABLE);
 
-            return success.get();
+                // Warm up ResultSet class loading safely on the main thread
+                try (ResultSet rs = statement.executeQuery("SELECT 1")) {
+                    if (rs.next()) {
+                        rs.getInt(1);
+                    }
+                }
+            }
         });
+
+        long duration = System.currentTimeMillis() - startTime;
+        logInfo("Tables initialization completed in " + duration + "ms");
     }
 
     public void close() {
@@ -186,27 +188,23 @@ public class DatabaseManager {
             }
 
             Map<String, Integer> stats = new HashMap<>();
-            AtomicReference<Map<String, Integer>> resultStats = new AtomicReference<>(stats);
 
             databaseConnector.connect(connection -> {
                 try (PreparedStatement stmt = connection.prepareStatement(GET_PLAYER_STATS)) {
                     stmt.setString(1, uuid.toString());
-                    ResultSet rs = stmt.executeQuery();
-
-                    int kothCount = 0;
-                    while (rs.next()) {
-                        String kothName = rs.getString("koth_name");
-                        int wins = rs.getInt("wins");
-                        stats.put(kothName, wins);
-                        kothCount++;
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            String kothName = rs.getString("koth_name");
+                            int wins = rs.getInt("wins");
+                            stats.put(kothName, wins);
+                        }
                     }
 
                     kothDataCache.setPlayerStats(uuid, stats);
-                    resultStats.set(stats);
                 }
             });
 
-            return resultStats.get();
+            return stats;
         });
     }
 
@@ -221,33 +219,31 @@ public class DatabaseManager {
             }
 
             List<SortedPlayer> results = new ArrayList<>();
-            AtomicReference<List<SortedPlayer>> resultList = new AtomicReference<>(results);
 
             databaseConnector.connect(connection -> {
                 try (PreparedStatement stmt = connection.prepareStatement(GET_TOP_PLAYERS_QUERY)) {
                     stmt.setInt(1, limit);
-                    ResultSet rs = stmt.executeQuery();
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            String name = rs.getString("name");
+                            String uuidStr = rs.getString("uuid");
+                            int totalWins = rs.getInt("total_wins");
 
-                    while (rs.next()) {
-                        String name = rs.getString("name");
-                        String uuidStr = rs.getString("uuid");
-                        int totalWins = rs.getInt("total_wins");
+                            SortedPlayer player = new SortedPlayer(
+                                    UUID.fromString(uuidStr),
+                                    name,
+                                    totalWins
+                            );
 
-                        SortedPlayer player = new SortedPlayer(
-                                UUID.fromString(uuidStr),
-                                name,
-                                totalWins
-                        );
-
-                        results.add(player);
+                            results.add(player);
+                        }
                     }
 
                     kothDataCache.updateTopPlayers(results);
-                    resultList.set(results);
                 }
             });
 
-            return resultList.get();
+            return results;
         });
     }
 
