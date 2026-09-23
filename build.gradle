@@ -52,6 +52,10 @@ shadowJar {
 
 tasks.build.dependsOn tasks.shadowJar
 
+clean {
+    delete file("$rootDir/target")
+}
+
 processResources {
     def props = [version: version]
     inputs.properties props
